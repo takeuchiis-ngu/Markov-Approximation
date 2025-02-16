@@ -9,69 +9,66 @@ import collections
 from flow import Flow
 import matplotlib.pyplot as plt
 import time
-import numpy as np
 
-# 強化学習のエージェント定義
-class QLearningAgent:
-    def __init__(self, num_paths, alpha=0.1, gamma=0.9, epsilon=0.1):
-        self.q_table = np.zeros(num_paths)  # 経路ごとのQ値
-        self.alpha = alpha  # 学習率
-        self.gamma = gamma  # 割引率
-        self.epsilon = epsilon  # ε-greedy法の探索率
-
-    def select_action(self):
-        if random.random() < self.epsilon:  # ランダム選択
-            return random.randint(0, len(self.q_table) - 1)
-        else:  # Q値が最大の行動を選択
-            return np.argmax(self.q_table)
-
-    def update(self, action, reward, next_max_q):
-        # Q値の更新
-        self.q_table[action] += self.alpha * (reward + self.gamma * next_max_q - self.q_table[action])
-
-# すべてのパスの組み合わせの中から負荷率が最小になる組み合わせを見つける関数
+# すべてのパスの組み合わせの中からフローが取り得る経路を求める関数
 def find_all_paths(g, start, end, path=None):
     if path is None:
         path = []
-    path = path + [start]  # 現在の頂点を経路に追加
+    path = path + [start]
     
-    if start == end:  # 終点に到達した場合、経路を返す
+    if start == end:
         return [path]
     
-    if start not in g:  # 次に進む辺がない場合、空リストを返す
+    if start not in g:
         return []
     
-    paths = []  # すべての経路を格納するリスト
-    for neighbor in g[start]:  # 隣接する頂点を探索
-        if neighbor not in path:  # 無限ループを防ぐため訪問済みでない頂点のみ進む
+    paths = []
+    for neighbor in g[start]:
+        if neighbor not in path:
             new_paths = find_all_paths(g, neighbor, end, path)
-            paths.extend(new_paths)  # 新しい経路を追加
+            paths.extend(new_paths)
     
     return paths
 
-# 滞在時間の計算関数
-def calculate_stay_time(flow_path_count, total_path_count, zeta, beta, min_global_max_load_ratio, flow_min_max_load_ratio):
-    stay_time = (flow_path_count * zeta * math.exp(beta * min_global_max_load_ratio)) / \
-                (flow_path_count * math.exp(beta * flow_min_max_load_ratio))
-    return stay_time
+# タイマーの計算関数
+def calculate_timer(current_max_load, next_max_load, total_path_count, tau=2, beta=20):
+    return (1 / total_path_count) * math.exp(tau - beta * (current_max_load - next_max_load))
 
-
-a = 20
-b = a #int (input('area品種数>>'))
-# グラフ生成パラメータ
-node = 10
-retu = 9
-graph_model = "random"
-beta = 30
-zeta = 1
-
-count = 60
-time_ave = 3000
-# グラフの生成
 # シード値の設定
-seed_value = 42  # 任意のシード値を指定
+seed_value = 42
 random.seed(seed_value)
 
+# グラフ生成パラメータ
+node = 14
+retu = 9
+graph_model = "random"
+beta = 20
+zeta = 1
+count = 20
+
+a = 15
+b = a
+
+# ユーザーが入力可能なパラメータ
+# flow_add_timing = 10,20
+# add_flow = (1,5),(2,7)
+flow_add_timing = 10
+add_flow = (1,5)
+# flow_add_timing = None
+# add_flow = None
+new_flow_iterations = [flow_add_timing]  # 追加するタイミング
+new_flow_pairs = [add_flow]  # 追加するフローの始点と終点
+
+# edge_failed_timing = 15,20
+# failed_edge = (2,5),(6,7)
+edge_failed_timing = 15
+failed_edge = (2,5)
+edge_failed_timing = None
+failed_edge = None
+failed_edge_iterations = [edge_failed_timing]  # エッジ障害発生のタイミング
+failed_edges_list = [failed_edge]  # 消失するエッジ
+
+# グラフの生成
 g = graph_making.Graphs(a, b)
 g.randomGraph(g, n=node, k=5, seed=seed_value, number_of_area=1, number_of_areanodes=node, area_height=retu)
 
@@ -82,130 +79,132 @@ capacity = nx.get_edge_attributes(g, 'capacity')
 flows = []
 all_paths = []
 number_of_paths = []
-agents = []
 area_nodes_list = list(g.area_nodes_dict[0])
+current_paths = []
 
-for _ in range(a):  # フローの設定
+def add_new_flow(s, t):
+    if s is None or t is None:
+        return
+    demand = random.randint(5, 15)
+    paths = find_all_paths(g, s, t)
+    if paths:
+        flow = Flow(g, len(flows), s, t, demand)
+        flows.append(flow)
+        all_paths.append(paths)
+        number_of_paths.append(len(paths))
+        current_paths.append(random.choice(paths))
+        
+def handle_edge_failure(edge):
+    if edge is None:
+        return    
+    print(f"Edge {edge} failed. Re-routing affected flows.")
+    failed_edges.add(edge)
+    if edge in capacity:
+        del capacity[edge]
+    
+    affected_flows = []
+    for i, path in enumerate(current_paths):
+        if any((path[j], path[j+1]) == edge for j in range(len(path) - 1)):
+            affected_flows.append(i)
+    
+    for i in affected_flows:
+        new_paths = [p for p in all_paths[i] if not any((p[j], p[j+1]) in failed_edges for j in range(len(p) - 1))]
+        if new_paths:
+            new_path = random.choice(new_paths)
+            print(f"Flow {i} re-routed from {current_paths[i]} to {new_path}")
+            current_paths[i] = new_path
+
+def get_safe_demand(flow):
+    if flow is None:
+        return 0
+    try:
+        return flow.get_demand()
+    except AttributeError:
+        return 0
+        
+for _ in range(a):
     while True:
-        s = random.choice(area_nodes_list)
-        t = random.choice(area_nodes_list)
-        while s == t:
-            t = random.choice(area_nodes_list)
-
-        demand = random.randint(5, 15)  # 需要量をランダムに設定
-        # demand = 10
-        if not any(flow.get_s() == s and flow.get_t() == t and flow.get_demand() == demand for flow in flows):
-            break  # 重複しない場合のみループを抜ける
-
+        s, t = random.sample(area_nodes_list, 2)
+        demand = random.randint(5, 15)
+        
+        paths = find_all_paths(g, s, t)
+        if not paths:
+            continue
+        
+        if not any(flow.get_s() == s and flow.get_t() == t for flow in flows):
+            break
+    
     flow = Flow(g, len(flows), s, t, demand)
     flows.append(flow)
-
-    paths = find_all_paths(g, s, t)
     all_paths.append(paths)
     number_of_paths.append(len(paths))
-
-    agent = QLearningAgent(len(paths))  # エージェントを作成
-    agents.append(agent)
+    current_paths.append(random.choice(paths))
 
 min_global_max_load_ratio = float('inf')
-max_load_ratio_history = []  # 最大負荷率の履歴を記録
+max_load_ratio_history = []
+flow_updates = 0
+selected_paths = [None] * len(flows)
+current_paths = [random.choice(paths) for paths in all_paths]
+initial_paths = current_paths[:]
 
-# フローごとの状態管理
-flow_timers = [0] * len(flows)
-flow_updates = [0] * len(flows)
-
+total_path_count = sum(number_of_paths)
 start_time = time.time()
 end_simulation = False
+iterations = []
+max_load_ratios = []
+flow_paths_history = []
+change_history = []
+
+i_iteration = 0
+
+failed_edges = set()
 
 while not end_simulation:
-    # 現在の時刻を取得
-    current_time = time.time() - start_time
-
-    # 辺ごとの需要量を累積
+    i_iteration += 1
     total_demand = collections.defaultdict(float)
-    selected_paths = []
-
-    for i, (flow, paths, agent) in enumerate(zip(flows, all_paths, agents)):
-        if flow_timers[i] <= current_time:  # フローの経路変更タイミング
-            demand = flow.get_demand()
-            action = agent.select_action()  # エージェントによる経路選択
-            selected_path = paths[action]
-            selected_paths.append(selected_path)
-
-            print(f"Flow {i + 1} selects path: {selected_path} with demand: {demand}")
-
-            # 負荷を更新
-            for j in range(len(selected_path) - 1):
-                edge = (selected_path[j], selected_path[j + 1])
-                total_demand[edge] += demand
-
-            # 負荷率を計算
-            edge_load_ratios = {}
-            for edge, total_flow in total_demand.items():
-                edge_load_ratios[edge] = total_flow / capacity[edge]
-
-            # 最大負荷率を計算
-            current_max_load_ratio = max(edge_load_ratios.values())
-            max_load_ratio_history.append(current_max_load_ratio)
-            min_global_max_load_ratio = min(min_global_max_load_ratio, current_max_load_ratio)
-
-            # 各フローの最大負荷率を計算
-            max_ratio = 0
-            for j in range(len(selected_path) - 1):
-                edge = (selected_path[j], selected_path[j + 1])
-                max_ratio = max(max_ratio, edge_load_ratios[edge])
-
-            print(f"Flow {i + 1} max ratio: {max_ratio}")
-
-            # 滞在時間を計算
-            flow_path_count = len(selected_path)
-            total_path_count = sum(number_of_paths)
-            stay_time = calculate_stay_time(flow_path_count, total_path_count, zeta, beta, min_global_max_load_ratio, max_ratio)
-
-            print(f"Flow {i + 1} stay time: {stay_time:.4f}")
-
-            # 報酬を計算してQ値を更新
-            reward = 1 / stay_time
-            next_max_q = max(agent.q_table)  # 次の状態での最大Q値
-            agent.update(action, reward, next_max_q)
-
-            # 次の経路変更タイミングを設定
-            flow_timers[i] = current_time + stay_time
-            flow_updates[i] += 1
-
-    # 全フローの経路変更が規定回数に達したか確認
-    if all(update >= count for update in flow_updates):
+    
+    for path, flow in zip(current_paths, flows):
+        for j in range(len(path) - 1):
+            edge = (path[j], path[j + 1])
+            if edge not in failed_edges and flow is not None:
+                total_demand[edge] += get_safe_demand(flow)
+    if failed_edge_iterations and i_iteration in failed_edge_iterations:
+        index = failed_edge_iterations.index(i_iteration)
+        handle_edge_failure(failed_edges_list[index])    
+    if new_flow_iterations and i_iteration in new_flow_iterations:
+        index = new_flow_iterations.index(i_iteration)
+        add_new_flow(*new_flow_pairs[index])
+    
+    iterations.append(i_iteration)
+    max_load_ratios.append(min_global_max_load_ratio)    
+    flow_paths_history.append(current_paths[:])
+    
+    if flow_updates >= count:
         end_simulation = True
 
-# 時間平均の最大負荷率を計算
-if len(max_load_ratio_history)>time_ave:
-    time_average_max_load_ratio = sum(max_load_ratio_history[time_ave:]) / len(max_load_ratio_history[time_ave:])
-    print(f"\nTime-Averaged Maximum Load Ratio: {time_average_max_load_ratio:.4f}")
-else:
-    time_average_max_load_ratio = sum(max_load_ratio_history) / len(max_load_ratio_history)
-    print(f"\nTime-Averaged Maximum Load Ratio: {time_average_max_load_ratio:.4f}")
+half_index = len(max_load_ratio_history) // 2
+avg_max_load_ratio_late = sum(max_load_ratio_history[half_index:]) / len(max_load_ratio_history[half_index:])
 
-# 最後に観測した最大負荷率の中で最小の値を表示
-min_final_max_load_ratio = min(max_load_ratio_history)
-print(f"Minimum of Final Observed Maximum Load Ratios: {min_final_max_load_ratio:.4f}")
+print(f"\nObserved Minimum Maximum Load Ratio: {min_global_max_load_ratio:.4f}")
+print(f"Average Maximum Load Ratio in the Latter Half: {avg_max_load_ratio_late:.4f}")
 
-# 全フローの始点と終点を表示
-print("\nAll Flows' Start and End Points:")
-for i, flow in enumerate(flows):
-    print(f"Flow {i + 1}: Start = {flow.get_s()}, End = {flow.get_t()}")
+print("\nInitial Flow Paths:")
+for i, path in enumerate(initial_paths):
+    print(f"Flow {i}: {path}")
 
-# 全フローの需要量を表示
-print("\nAll Flows' Demands:")
-for i, flow in enumerate(flows):
-    print(f"Flow {i + 1}: Demand = {flow.get_demand()}")
+print("\nFlow Change History:")
+for change in change_history:
+    print(change)
 
-# 可視化
+print("\nFinal Flow Paths:")
+for i, path in enumerate(current_paths):
+    print(f"Flow {i}: {path}")
+
 plt.figure(figsize=(10, 6))
-plt.plot(range(len(max_load_ratio_history)), max_load_ratio_history, marker='o', label='Max Load Ratio')
-plt.axhline(y=min_final_max_load_ratio, color='r', linestyle='--', label='Min of Final Max Load Ratios')
-plt.title("Maximum Load Ratio Over Iterations")
+plt.plot(iterations, max_load_ratios, marker='o', label='Max Load Ratio')
 plt.xlabel("Iteration")
 plt.ylabel("Maximum Load Ratio")
+plt.title("Maximum Load Ratio Over Iterations")
 plt.legend()
 plt.grid(True)
 plt.show()

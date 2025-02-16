@@ -104,8 +104,8 @@ class Graphs(nx.DiGraph):
 		self.number_of_areanodes = number_of_areanodes
 		self.area_height = area_height
 		height = int(area_height)
-		ty = 1	#ty=0だとnewman_watts_strogatz_graph。1だと自作のグラフ
-		if ty == 0:
+		ty = 0	#ty=0だとnewman_watts_strogatz_graph。1だと自作のグラフ
+		if ty == 1:
 			NWS = nx.newman_watts_strogatz_graph(n, k, 0.5, seed=seed)
 			for a in range(number_of_area):
 				self.area_nodes_dict[a] = [] #リストの中のリスト生成？self.area_nodes_dict[[],[]]

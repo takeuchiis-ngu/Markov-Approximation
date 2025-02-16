@@ -33,7 +33,7 @@ def find_all_paths(g, start, end, path=None):
     return paths
 
 # タイマーの計算関数（新しいT_kの式）
-def calculate_timer(current_max_load, next_max_load, total_path_count, tau=1, beta=30):
+def calculate_timer(current_max_load, next_max_load, total_path_count, tau=1, beta=20):
     return (1 / total_path_count) * math.exp(tau - beta * (current_max_load - next_max_load)) + 0.2
 
 # シード値の設定
@@ -48,7 +48,7 @@ beta = 20
 zeta = 1
 count = 20  # 経路変更の最大回数
 
-a = 10  # フロー数はノード数を超えても良い
+a = 20  # フロー数はノード数を超えても良い
 b = a
 
 # グラフの生成
@@ -85,7 +85,6 @@ min_global_max_load_ratio = float('inf')
 max_load_ratio_history = []
 
 # フローごとの状態管理
-flow_timers = [0] * len(flows)
 flow_updates = [0] * len(flows)
 selected_paths = [None] * len(flows)
 
@@ -110,6 +109,7 @@ while not end_simulation:
     current_time = time.time() - start_time
     total_demand = collections.defaultdict(float)
     
+    # フローの経路をランダムに決定し、需要量も含めてグラフに流す
     for flow in flows:
         path = random.choice(all_paths[flow.get_id()])
         for j in range(len(path) - 1):
@@ -119,7 +119,6 @@ while not end_simulation:
     current_max_load_ratio = max([flow / capacity[edge] for edge, flow in total_demand.items() if edge in capacity], default=0)
     max_load_ratio_history.append(current_max_load_ratio)
     
-    base_start_time = time.time()
     best_timer = float('inf')
     best_flow_index = None
     best_next_path = None
@@ -145,10 +144,7 @@ while not end_simulation:
     
     if best_flow_index is not None:
         selected_paths[best_flow_index] = best_next_path
-        flow_timers[best_flow_index] = base_start_time + best_timer
         flow_updates[best_flow_index] += 1
-    
-    time.sleep(max(0, best_timer - (time.time() - base_start_time)))
     
     iterations.append(i_iteration)
     max_load_ratios.append(current_max_load_ratio)
