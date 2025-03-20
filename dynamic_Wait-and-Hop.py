@@ -39,7 +39,7 @@ def calculate_timer(current_max_load, next_max_load, total_path_count, tau, beta
 node = 10
 seed_value = 42  # 任意のシード値を指定
 random.seed(seed_value)
-a = 10  # 品種数
+a = 15  # 品種数
 b = a
 beta = 160
 tau = 2
