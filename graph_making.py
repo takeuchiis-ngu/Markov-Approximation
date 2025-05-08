@@ -104,7 +104,7 @@ class Graphs(nx.DiGraph):
 		self.number_of_areanodes = number_of_areanodes
 		self.area_height = area_height
 		height = int(area_height)
-		ty = 0	#ty=0だとnewman_watts_strogatz_graph。1だと自作のグラフ
+		ty = 0	#ty=1だとnewman_watts_strogatz_graph。0だと自作のグラフ
 		if ty == 1:
 			NWS = nx.newman_watts_strogatz_graph(n, k, 0.5, seed=seed)
 			for a in range(number_of_area):
@@ -228,8 +228,8 @@ class Graphs(nx.DiGraph):
 	#双方向辺を追加する関数
 	def add_bidirectionaledge(self,G,x,y): # bidirectional = 双方向
 		# cap = random.randrange(500,1001,10) #500～1000の中からステップサイズ10で1つ選ばれる
-		# cap = random.randrange(45,55,1)
-		cap = 50
+		cap = random.randrange(40,60,1)
+		# cap = 50
 		# if x == 1 and y == 2:
 		# 	cap = 60
 		# if x == 3 and y == 2:

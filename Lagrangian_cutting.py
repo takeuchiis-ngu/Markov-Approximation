@@ -33,7 +33,7 @@ retu = 9
 d = retu*retu
 node = 10
 graph_model = "random"
-seed_value = 42
+seed_value = 40
 random.seed(seed_value) #ランダムの固定化
 elapsed_time_kakai = 0
 

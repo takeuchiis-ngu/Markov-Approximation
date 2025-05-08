@@ -24,16 +24,16 @@ from operator import itemgetter, attrgetter
 # すべてのパスの組合せの中から，負荷率が最小になる組合せを見つける関数
 # O(|Pl|^k)になるので，指数時間になる
 
-kurikaesi = 0
-a = 10
+kurikaesi = 1
+a = 15
 b = a #int (input('area品種数>>'))
 c = 1 #int (input('エリア数>>'))
 #d = 16 #int (input('エリアのノード数>>'))
-retu = 3
+retu = 4
 d = retu*retu
 node = 10
 graph_model = "random"
-seed_value = 42
+seed_value = 40
 random.seed(seed_value) #ランダムの固定化
 elapsed_time_kakai = 0
 
@@ -43,7 +43,7 @@ elapsed_time_kakai = 0
 
 
 
-while(kurikaesi < 1):
+while(kurikaesi > 0):
 
     if(graph_model == 'grid'):
         g = graph_making.Graphs(a,b) #品種数,areaの品種数
@@ -240,6 +240,7 @@ while(kurikaesi < 1):
     print('Objective :', UELB_kakai.objective_value) #最小の最大負荷率
     print(All_commodity_list) #全ての品種
     print("需要量：",demand_list)
+    print(capacity)
     # print(result_x)
     print(result_flow_var_kakai)
     print(all_path)
@@ -262,4 +263,4 @@ while(kurikaesi < 1):
     nx.draw(g, with_labels=True)
     plt.show()
 
-    kurikaesi += 1
+    kurikaesi -= 1
