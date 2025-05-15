@@ -39,11 +39,11 @@ def calculate_timer(current_max_load, next_max_load, total_path_count, tau, beta
 node = 10 # NSFNET使用中は14で固定
 seed_value = 40  # 任意のシード値を指定
 random.seed(seed_value)
-a = 15  # 品種数
+a = 20  # 品種数
 b = a
 beta = 160
 tau = 2
-count = 250  # 経路変更の最大回数
+count = 20  # 経路変更の最大回数
 
 retu = 4
 graph_model = "random"
@@ -107,7 +107,7 @@ for _ in range(1):
         i_iteration += 1
         total_demand = collections.defaultdict(float)
         
-        for path, flow in zip(current_paths, flows):
+        for path, flow in zip(current_paths, flows): # current_paths「各品種が現在通っている経路の配列」、flows「全品種（始点, 終点, フロー量）の配列」
             for j in range(len(path) - 1):
                 edge = (path[j], path[j + 1])
                 total_demand[edge] += flow.get_demand() # 各品種が経路として利用しているエッジの需要量の合計を計算
@@ -118,11 +118,16 @@ for _ in range(1):
         best_timer = float('inf')
         best_flows = []
         
-        for i, (flow, paths) in enumerate(zip(flows, all_paths)):   # 例：i「通し番号」、flow「品種1」、paths「品種1が取り得る全ての経路」
+        for i, (flow, paths, current_path) in enumerate(zip(flows, all_paths,current_paths)):   # 例：i「通し番号」、flow「品種1」、paths「品種1が取り得る全ての経路」、current_path「品種1の現在の経路」
             demand = flow.get_demand()
             
+            temp_delete_current_path = total_demand.copy()
+            for j in range(len(current_path) - 1):
+                edge = (current_path[j], current_path[j + 1])
+                temp_delete_current_path[edge] -= demand # グラフ全体の辺からcurrent path の需要量を取り除く
+            
             for candidate_path in paths:
-                temp_demand = total_demand.copy()
+                temp_demand = temp_delete_current_path.copy()
                 for j in range(len(candidate_path) - 1):
                     edge = (candidate_path[j], candidate_path[j + 1])
                     temp_demand[edge] += demand
@@ -139,8 +144,8 @@ for _ in range(1):
                     best_flows = [(i, candidate_path)]
                 elif timer == best_timer:
                     best_flows.append((i, candidate_path))    
-        if best_flows:
-            best_flow_index, chosen_path = random.choice(best_flows)
+        if best_flows: # best_flowsが空でなければ
+            best_flow_index, chosen_path = random.choice(best_flows) # best_flowsの中から１つランダムに経路変更を選ぶ
             change_history.append(f"Iteration {i_iteration}: Flow {best_flow_index} changed from {current_paths[best_flow_index]} to {chosen_path}")
             current_paths[best_flow_index] = chosen_path
             flow_updates += 1
@@ -177,6 +182,7 @@ for _ in range(1):
 
     print("フローの経路数合計")
     print(total_path_count)
+    
 
 
 

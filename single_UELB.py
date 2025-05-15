@@ -25,7 +25,7 @@ from operator import itemgetter, attrgetter
 # O(|Pl|^k)になるので，指数時間になる
 
 kurikaesi = 1
-a = 15
+a = 20
 b = a #int (input('area品種数>>'))
 c = 1 #int (input('エリア数>>'))
 #d = 16 #int (input('エリアのノード数>>'))
