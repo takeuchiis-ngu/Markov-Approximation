@@ -1,11 +1,4 @@
-
 # coding: UTF-8
-# ---------------------------------------
-# 各フローに対して候補経路の評価を multiprocessing により並列化し、
-# 最も早くタイマーが 0 になる候補を採用する方式（必ず変更されるように）。
-# 実行環境の CPU コア数に応じてプロセス数を自動調整し、高速かつ公平な探索を実現。
-# ---------------------------------------
-
 import networkx as nx
 import graph_making
 import math
@@ -13,72 +6,94 @@ import random
 import collections
 from flow import Flow
 import matplotlib.pyplot as plt
-import time
-from multiprocessing import Process, Manager, cpu_count
 from decimal import Decimal, getcontext
+import time
+import concurrent.futures
+import multiprocessing
+
+getcontext().prec = 30  # 高精度計算用
 
 def calculate_timer(current_max_load, next_max_load, total_path_count, tau, beta):
-    return (1 / total_path_count) * math.exp(tau - (1/2 * beta * (current_max_load - next_max_load)))
+    diff = Decimal(current_max_load) - Decimal(next_max_load)
+    exponent = Decimal(tau) - Decimal("0.5") * Decimal(beta) * diff
+    return Decimal(1) / Decimal(total_path_count) * Decimal(math.exp(float(exponent))) + Decimal(0.1)
 
-node = 10
-seed_value = 40
-random.seed(seed_value)
-a = 20
-beta = 160
-tau = 2
-count = 20
-retu = 4
-
-def evaluate_flow(i, current_paths, flows, all_paths, total_demand_snapshot, capacity, total_path_count, current_max_load_ratio, return_list):
-    getcontext().prec = 20
+def evaluate_candidate(i, current_path, candidate_path, flows, total_demand, capacity, total_path_count, current_max_load_ratio):
     flow = flows[i]
     demand = flow.get_demand()
-    current_path = current_paths[i]
-    best_timer = float('inf')
-    best_path = None
 
-    temp_delete_current_path = total_demand_snapshot.copy()
+    temp_demand = total_demand.copy()
     for j in range(len(current_path) - 1):
         edge = (current_path[j], current_path[j + 1])
-        temp_delete_current_path[edge] -= demand
+        temp_demand[edge] -= demand
 
-    for candidate_path in all_paths[i]:
-        if candidate_path == current_path:
-            continue  # 同じ経路は候補から除外
+    for j in range(len(candidate_path) - 1):
+        edge = (candidate_path[j], candidate_path[j + 1])
+        temp_demand[edge] += demand
 
-        temp_demand = temp_delete_current_path.copy()
-        for j in range(len(candidate_path) - 1):
-            edge = (candidate_path[j], candidate_path[j + 1])
-            temp_demand[edge] += demand
+    edge_load_ratios = {
+        edge: Decimal(temp_demand[edge]) / Decimal(capacity[edge])
+        for edge in temp_demand if edge in capacity
+    }
 
-        edge_load_ratios = {edge: temp_demand[edge] / capacity[edge] for edge in temp_demand if edge in capacity}
-        next_max_load_ratio = max(edge_load_ratios.values()) if edge_load_ratios else 0
-        timer = calculate_timer(current_max_load_ratio, next_max_load_ratio, total_path_count, tau, beta)
+    next_max_load_ratio = max(edge_load_ratios.values()) if edge_load_ratios else Decimal(0)
+    timer = calculate_timer(current_max_load_ratio, next_max_load_ratio, total_path_count, tau=2, beta=160)
 
-        if timer < best_timer:
-            best_timer = timer
-            best_path = candidate_path
+    return {
+        'flow_index': i,
+        'candidate_path': candidate_path,
+        'timer': timer,
+        'next_max_load': next_max_load_ratio
+    }
 
-    if best_path is not None:
-        return_list.append((best_timer, i, best_path))
+def find_all_paths(g, start, end, path=None):
+    if path is None:
+        path = []
+    path = path + [start]
+    if start == end:
+        return [path]
+    if start not in g:
+        return []
+    paths = []
+    for neighbor in g[start]:
+        if neighbor not in path:
+            new_paths = find_all_paths(g, neighbor, end, path)
+            paths.extend(new_paths)
+    return paths
 
 def main():
-    g = graph_making.Graphs(a, a)
-    g.randomGraph(g, n=node, k=5, seed=seed_value, number_of_area=1, number_of_areanodes=node, area_height=retu)
-    capacity = nx.get_edge_attributes(g, 'capacity')
+    node = 10
+    seed_value = 42
+    a = 15
+    count = 30
+    retu = 4
 
+    random.seed(seed_value)
+    g = graph_making.Graphs(a, a)
+    g.randomGraph(
+        g,
+        n=node,
+        k=5,
+        seed=seed_value,
+        number_of_area=1,
+        number_of_areanodes=node,
+        area_height=retu
+    )
+
+    capacity = nx.get_edge_attributes(g, 'capacity')
+    area_nodes_list = list(g.area_nodes_dict[0])
     All_commodity_list = []
     demand_list = []
     flows = []
     all_paths = []
     number_of_paths = []
-    area_nodes_list = list(g.area_nodes_dict[0])
 
     for _ in range(a):
         while True:
             s, t = random.sample(area_nodes_list, 2)
             demand = random.randint(5, 15)
             paths = find_all_paths(g, s, t)
+            paths.sort(key=lambda p: len(p))  # ホップ数の少ない順に並べる
             if not paths:
                 continue
             if s != t and (s, t) not in All_commodity_list:
@@ -108,32 +123,67 @@ def main():
                 edge = (path[j], path[j + 1])
                 total_demand[edge] += flow.get_demand()
 
-        current_max_load_ratio = max([flow / capacity[edge] for edge, flow in total_demand.items() if edge in capacity], default=0)
+        current_max_load_ratio = max(
+            [Decimal(flow) / Decimal(capacity[edge]) for edge, flow in total_demand.items() if edge in capacity],
+            default=Decimal(0)
+        )
         max_load_ratio_history.append(current_max_load_ratio)
 
-        manager = Manager()
-        return_list = manager.list()
-        processes = []
+        early_accept_threshold = Decimal("1e-8")
+        found = False
+        best_result = None
+        with concurrent.futures.ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+            futures = []
+            for i, (current_path, paths) in enumerate(zip(current_paths, all_paths)):
+                for candidate_path in paths:
+                    if candidate_path == current_path:
+                        continue
+                    futures.append(executor.submit(
+                        evaluate_candidate,
+                        i,
+                        current_path,
+                        candidate_path,
+                        flows,
+                        total_demand,
+                        capacity,
+                        total_path_count,
+                        current_max_load_ratio
+                    ))
 
-        for i in range(len(flows)):
-            p = Process(target=evaluate_flow, args=(i, current_paths, flows, all_paths,
-                                                    total_demand, capacity, total_path_count,
-                                                    current_max_load_ratio, return_list))
-            p.start()
-            processes.append(p)
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                timer = result['timer']
 
-        for p in processes:
-            p.join()
+                # 高精度で表示
+                # print(f"[Timer Check] Flow {result['flow_index']} → {result['candidate_path']} | timer = {timer:.10E}")
 
-        if return_list:
-            best_timer, best_flow_index, chosen_path = min(return_list, key=lambda x: x[0])
-            change_history.append(f"Iteration {i_iteration}: Flow {best_flow_index} changed from {current_paths[best_flow_index]} to {chosen_path}")
-            current_paths[best_flow_index] = chosen_path
+                if timer <= early_accept_threshold:
+                    print("🟢 Early accept: timer below threshold")
+                    best_result = result
+                    found = True
+                    break
+
+            if not found:
+                # しきい値以下が無かった場合、最小の timer 値のものを選ぶ
+                sorted_results = sorted(
+                    [f.result() for f in futures],
+                    key=lambda x: x['timer']
+                )
+                if sorted_results:
+                    best_result = sorted_results[0]
+                    # print("🟡 Accepted best (non-threshold) timer")
+
+        if best_result:
+            i = best_result['flow_index']
+            new_path = best_result['candidate_path']
+            change_history.append(
+                f"Iteration {i_iteration}: Flow {i} changed from {current_paths[i]} to {new_path} "
+                f"(timer = {best_result['timer']:.10E})"
+            )
+            current_paths[i] = new_path
             flow_updates += 1
-            print(f"✔️ Flow {best_flow_index} path changed. Timer: {best_timer:.4f}")
         else:
-            print("⚠️ No alternative path found. Skipping iteration.")
-
+            print("⚠️ No valid path change found.")
     print("\nInitial Paths:")
     for i, path in enumerate(initial_paths):
         print(f"Flow {i}: {path}")
@@ -146,33 +196,26 @@ def main():
     for i, path in enumerate(current_paths):
         print(f"Flow {i}: {path}")
 
-    avg_late = sum(max_load_ratio_history[len(max_load_ratio_history)//2:]) / len(max_load_ratio_history[len(max_load_ratio_history)//2:])
-    print(f"\nFinal Average Max Load (late half): {avg_late:.4f}")
+    if len(max_load_ratio_history) > 0:
+        half = len(max_load_ratio_history) // 2
+        avg_late = sum(max_load_ratio_history[half:]) / Decimal(len(max_load_ratio_history[half:]))
+        print(f"\nFinal Average Max Load (late half): {avg_late:.10f}")
+    else:
+        print("\nNo max load history recorded.")
+    
+    print(demand_list)
 
-    import matplotlib.pyplot as plt
+    # 可視化
     plt.figure(figsize=(10, 6))
-    plt.plot(range(1, len(max_load_ratio_history)+1), max_load_ratio_history, marker='o')
+    plt.plot(range(1, len(max_load_ratio_history) + 1),
+             [float(val) for val in max_load_ratio_history],
+             marker='o')
     plt.xlabel("Iteration", fontsize=14)
     plt.ylabel("Maximum Load Ratio", fontsize=14)
     plt.title("Maximum Load Ratio Over Iterations", fontsize=16)
     plt.grid(True)
     plt.tight_layout()
     plt.show()
-
-def find_all_paths(g, start, end, path=None):
-    if path is None:
-        path = []
-    path = path + [start]
-    if start == end:
-        return [path]
-    if start not in g:
-        return []
-    paths = []
-    for neighbor in g[start]:
-        if neighbor not in path:
-            new_paths = find_all_paths(g, neighbor, end, path)
-            paths.extend(new_paths)
-    return paths
 
 if __name__ == "__main__":
     main()

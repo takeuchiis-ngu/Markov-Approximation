@@ -25,15 +25,15 @@ from operator import itemgetter, attrgetter
 # O(|Pl|^k)になるので，指数時間になる
 
 kurikaesi = 1
-a = 20
+a = 15
 b = a #int (input('area品種数>>'))
 c = 1 #int (input('エリア数>>'))
 #d = 16 #int (input('エリアのノード数>>'))
 retu = 4
 d = retu*retu
-node = 10
+node = 14
 graph_model = "random"
-seed_value = 40
+seed_value = 34
 random.seed(seed_value) #ランダムの固定化
 elapsed_time_kakai = 0
 
@@ -54,6 +54,8 @@ while(kurikaesi > 0):
         g.randomGraph(g, n=node, k=5, seed=seed_value, number_of_area =1, number_of_areanodes = node, area_height=retu)
         # nx.draw(g)
         # plt.show()
+    
+    capacity = nx.get_edge_attributes(g,'capacity')#全辺のcapacityの値を辞書で取得
 
     r_kakai = list(enumerate(g.edges())) #グラフのエッジと番号を対応付けたもの
     # print(r_kakai)
@@ -170,7 +172,6 @@ while(kurikaesi > 0):
     UELB_kakai.objective = minimize(L_kakai)
 
     UELB_kakai += (-L_kakai) >= -1 #負荷率1以下
-    capacity = nx.get_edge_attributes(g,'capacity')#全辺のcapacityの値を辞書で取得
     for e in range(len(g.edges())): #容量制限
         UELB_kakai += 0 <= L_kakai - ((xsum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for l in g.all_flows])) / capacity[r_kakai[e][1]])
     for l in g.all_flows: #フロー保存則
@@ -178,11 +179,41 @@ while(kurikaesi > 0):
         UELB_kakai += xsum([flow_var_kakai[l.get_id()][e]*(l.get_demand()) for e in range(len(g.edges())) if r_kakai[e][1][1] == l.get_update_s()]) == 0
         UELB_kakai += xsum([flow_var_kakai[l.get_id()][e]*(l.get_demand()) for e in range(len(g.edges())) if r_kakai[e][1][0] == l.get_update_t()]) == 0
         UELB_kakai += xsum([flow_var_kakai[l.get_id()][e]*(l.get_demand()) for e in range(len(g.edges())) if r_kakai[e][1][1] == l.get_update_t()]) == l.get_demand()
-    for l in g.all_flows: #フロー保存則
-        for v in g.nodes():
-            if(v != l.get_update_s() and v != l.get_update_t()):
-                UELB_kakai += xsum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for e in range(len(g.edges())) if r_kakai[e][1][0] == v])\
-                ==xsum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for e in range(len(g.edges())) if r_kakai[e][1][1] == v])
+    
+    # --- 正しいフロー保存則の実装 ---
+for k, flow in enumerate(g.all_flows):
+    u_k = flow.get_demand()
+    s_k = flow.get_update_s()
+    t_k = flow.get_update_t()
+    for v in g.nodes():
+        # 流入の合計
+        in_sum = xsum(
+            flow_var_kakai[k][e] * u_k
+            for e, (i, j) in r_kakai
+            if j == v
+        )
+        # 流出の合計
+        out_sum = xsum(
+            flow_var_kakai[k][e] * u_k
+            for e, (i, j) in r_kakai
+            if i == v
+        )
+        # 右辺の設定
+        if v == s_k:
+            rhs = -u_k
+        elif v == t_k:
+            rhs = u_k
+        else:
+            rhs = 0
+        # 保存則制約を追加
+        UELB_kakai += (in_sum - out_sum) == rhs
+
+    
+    # for l in g.all_flows: #フロー保存則
+    #     for v in g.nodes():
+    #         if(v != l.get_update_s() and v != l.get_update_t()):
+    #             UELB_kakai += xsum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for e in range(len(g.edges())) if r_kakai[e][1][0] == v])\
+    #             ==xsum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for e in range(len(g.edges())) if r_kakai[e][1][1] == v])
     # #制約式
     # #1-負荷率は1を超えない
     # UELB_kakai += (-L_kakai)>=-1

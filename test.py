@@ -1,196 +1,143 @@
 # coding: UTF-8
 
+# --- 省略部分 ---
 from mip import *
 import networkx as nx
 import graph_making
-import math
-import random
-import collections
 from flow import Flow
 import matplotlib.pyplot as plt
+import random
 import time
+import csv
 
-# すべてのパスの組み合わせの中からフローが取り得る経路を求める関数
-def find_all_paths(g, start, end, path=None):
-    if path is None:
-        path = []
-    path = path + [start]  # 現在の頂点を経路に追加
-    
-    if start == end:  # 終点に到達した場合、経路を返す
-        return [path]
-    
-    if start not in g:  # 次に進む辺がない場合、空リストを返す
-        return []
-    
-    paths = []  # すべての経路を格納するリスト
-    for neighbor in g[start]:  # 隣接する頂点を探索
-        if neighbor not in path:  # 無限ループを防ぐため訪問済みでない頂点のみ進む
-            new_paths = find_all_paths(g, neighbor, end, path)
-            paths.extend(new_paths)  # 新しい経路を追加
-    
-    return paths
-
-# タイマーの計算関数（新しいT_kの式）
-def calculate_timer(current_max_load, next_max_load, total_path_count, tau, beta):
-    return (1 / total_path_count) * math.exp(tau - (1/2 * beta * (current_max_load - next_max_load)))
-
-
-# グラフ生成パラメータ
-node = 10 # NSFNET使用中は14で固定
-seed_value = 40  # 任意のシード値を指定
-random.seed(seed_value)
-a = 20  # 品種数
+kurikaesi = 1
+a = 15
 b = a
-beta = 160
-tau = 2
-count = 20  # 経路変更の最大回数
-
+c = 1
 retu = 4
+d = retu*retu
+node = 10
 graph_model = "random"
+seed_value = 42
+random.seed(seed_value)
 
+while(kurikaesi > 0):
 
-for _ in range(1):
-    # グラフの生成
-    g = graph_making.Graphs(a, b)
-    g.randomGraph(g, n=node, k=5, seed=seed_value, number_of_area=1, number_of_areanodes=node, area_height=retu)
+    if(graph_model == 'random'):
+        g = graph_making.Graphs(a,b)
+        g.randomGraph(g, n=node, k=5, seed=seed_value, number_of_area=1, number_of_areanodes=node, area_height=retu)
 
-    # 容量の取得
-    capacity = nx.get_edge_attributes(g, 'capacity')
+    r_kakai = list(enumerate(g.edges()))
+    edge_dic_kakai = {(i,j):m for m,(i,j) in r_kakai}
+    num_dic_kakai = {m:(i,j) for m,(i,j) in r_kakai}
 
-    # フローの初期化
+    k = g.k
+    area_k = g.area_k
+    ELB_paths = dict()
     All_commodity_list = []
     demand_list = []
-    flows = []
-    all_paths = []
-    number_of_paths = []
-    area_nodes_list = list(g.area_nodes_dict[0])
+    max_L_optimize = 0
+    commodity_count = 0
 
-    for _ in range(a):  # フローの設定
-        while True:
-            s, t = random.sample(area_nodes_list, 2)  # s と t を異なるノードとして選択
-            demand = random.randint(5, 15)
-            
-            paths = find_all_paths(g, s, t)
-            if not paths:
-                continue  # 経路がない場合は再選択
-            
-            if(s != t and ((s,t) not in All_commodity_list)):
-                break  # 重複しない場合のみループを抜ける
-        
-        demand_list.append(demand)
-        All_commodity_list.append((s,t))
-        flow = Flow(g, len(flows), s, t, demand)
-        flows.append(flow)
-        all_paths.append(paths)
-        number_of_paths.append(len(paths))
+    for area in range(g.number_of_area):
+        area_nodes_list = list(g.area_nodes_dict[area])
+        tuples = []
+        flows_list = []
+        area_commodity_count = 0
 
-    min_global_max_load_ratio = float('inf')
-    max_load_ratio_history = []
+        for _ in range(a):
+            while True:
+                s, t = random.sample(area_nodes_list, 2)
+                demand = random.randrange(30, 40)
+                if(s != t and ((s,t) not in All_commodity_list)):
+                    break
 
-    # フローごとの状態管理
-    flow_updates = 0  # 全体の経路変更回数をカウント
-    selected_paths = [None] * len(flows)
-    current_paths = [random.choice(paths) for paths in all_paths]
-    initial_paths = current_paths[:]
+            tuples.append((s,t))
+            All_commodity_list.append((s,t))
+            demand_list.append(demand)
 
-    total_path_count = sum(number_of_paths)
-    start_time = time.time()
-    end_simulation = False
+            f = Flow(g,commodity_count,s,t,demand)
+            f.set_area_flow_id(area_commodity_count)
+            flows_list.append(f)
+            g.all_flows.append(f)
+            commodity_count += 1
+            area_commodity_count += 1
 
-    iterations = []
-    max_load_ratios = []
-    flow_paths_history = []
-    change_history = []
+        g.all_flow_dict[area] = flows_list
 
-    i_iteration = 0
-    while not end_simulation:
-        i_iteration += 1
-        total_demand = collections.defaultdict(float)
-        
-        for path, flow in zip(current_paths, flows): # current_paths「各品種が現在通っている経路の配列」、flows「全品種（始点, 終点, フロー量）の配列」
-            for j in range(len(path) - 1):
-                edge = (path[j], path[j + 1])
-                total_demand[edge] += flow.get_demand() # 各品種が経路として利用しているエッジの需要量の合計を計算
-        
-        current_max_load_ratio = max([flow / capacity[edge] for edge, flow in total_demand.items() if edge in capacity], default=0)
-        max_load_ratio_history.append(current_max_load_ratio)
-        min_global_max_load_ratio = min(min_global_max_load_ratio, current_max_load_ratio)  # 歴代の最小の負荷率 (更新制)
-        best_timer = float('inf')
-        best_flows = []
-        
-        for i, (flow, paths, current_path) in enumerate(zip(flows, all_paths,current_paths)):   # 例：i「通し番号」、flow「品種1」、paths「品種1が取り得る全ての経路」、current_path「品種1の現在の経路」
-            demand = flow.get_demand()
-            
-            temp_delete_current_path = total_demand.copy()
-            for j in range(len(current_path) - 1):
-                edge = (current_path[j], current_path[j + 1])
-                temp_delete_current_path[edge] -= demand # グラフ全体の辺からcurrent path の需要量を取り除く
-            
-            for candidate_path in paths:
-                temp_demand = temp_delete_current_path.copy()
-                for j in range(len(candidate_path) - 1):
-                    edge = (candidate_path[j], candidate_path[j + 1])
-                    temp_demand[edge] += demand
-                
-                edge_load_ratios = {edge: flow / capacity[edge] for edge, flow in temp_demand.items() if edge in capacity}
-                next_max_load_ratio = max(edge_load_ratios.values()) if edge_load_ratios else 0
-                
-                timer = calculate_timer(current_max_load_ratio, next_max_load_ratio, total_path_count, tau, beta)
-                
-                print(f"Iteration {i_iteration}, Flow {i}: Path {candidate_path}, Timer: {timer:.4f}, Max Load Ratio: {next_max_load_ratio:.4f}")
-                
-                if timer < best_timer:
-                    best_timer = timer
-                    best_flows = [(i, candidate_path)]
-                elif timer == best_timer:
-                    best_flows.append((i, candidate_path))    
-        if best_flows: # best_flowsが空でなければ
-            best_flow_index, chosen_path = random.choice(best_flows) # best_flowsの中から１つランダムに経路変更を選ぶ
-            change_history.append(f"Iteration {i_iteration}: Flow {best_flow_index} changed from {current_paths[best_flow_index]} to {chosen_path}")
-            current_paths[best_flow_index] = chosen_path
-            flow_updates += 1
-        
-        iterations.append(i_iteration)
-        max_load_ratios.append(current_max_load_ratio)
-        flow_paths_history.append(current_paths[:])
-        
-        if flow_updates >= count:
-            end_simulation = True
+    UELB_kakai = Model("UELB_kakai")
+    L_kakai = UELB_kakai.add_var("L_kakai", lb=0)
 
-    print("\nInitial Flow Paths:")
-    for i, path in enumerate(initial_paths):
-        print(f"Flow {i}: {path}")
+    flow_var_kakai = []
+    for l in range(len(g.all_flows)):
+        x_kakai = [UELB_kakai.add_var(f"x{l}_{m}", var_type=BINARY) for m, _ in r_kakai]
+        flow_var_kakai.append(x_kakai)
 
-    print("\nFlow Change History:")
-    for change in change_history:
-        print(change)
+    capacity = nx.get_edge_attributes(g, 'capacity')
 
-    print("\nFinal Flow Paths:")
-    for i, path in enumerate(current_paths):
-        print(f"Flow {i}: {path}")
+    for e in range(len(g.edges())):
+        edge = r_kakai[e][1]
+        cap = capacity.get(edge)
+        if cap is None:
+            rev_edge = (edge[1], edge[0])
+            cap = capacity.get(rev_edge)
+        if cap is None or cap == 0:
+            continue
+        UELB_kakai += ((xsum([flow_var_kakai[l.get_id()][e] * l.get_demand() for l in g.all_flows])) / cap) <= L_kakai
 
-    print("\n需要量：", demand_list)
+    for l in g.all_flows:
+        UELB_kakai += xsum([flow_var_kakai[l.get_id()][e]*l.get_demand() for e in range(len(g.edges())) if r_kakai[e][1][0] == l.get_update_s()]) == l.get_demand()
+        UELB_kakai += xsum([flow_var_kakai[l.get_id()][e]*l.get_demand() for e in range(len(g.edges())) if r_kakai[e][1][1] == l.get_update_s()]) == 0
+        UELB_kakai += xsum([flow_var_kakai[l.get_id()][e]*l.get_demand() for e in range(len(g.edges())) if r_kakai[e][1][0] == l.get_update_t()]) == 0
+        UELB_kakai += xsum([flow_var_kakai[l.get_id()][e]*l.get_demand() for e in range(len(g.edges())) if r_kakai[e][1][1] == l.get_update_t()]) == l.get_demand()
 
-    # 後半50%の最大負荷率の平均を計算
-    half_index = len(max_load_ratio_history) // 2
-    avg_max_load_ratio_late = sum(max_load_ratio_history[half_index:]) / len(max_load_ratio_history[half_index:])
+        for v in g.nodes():
+            if v != l.get_update_s() and v != l.get_update_t():
+                UELB_kakai += xsum([flow_var_kakai[l.get_id()][e]*l.get_demand() for e in range(len(g.edges())) if r_kakai[e][1][0] == v]) \
+                              == xsum([flow_var_kakai[l.get_id()][e]*l.get_demand() for e in range(len(g.edges())) if r_kakai[e][1][1] == v])
 
-    print(f"\nObserved Minimum Maximum Load Ratio: {min_global_max_load_ratio:.4f}")
-    print(f"Average Maximum Load Ratio in the Latter Half: {avg_max_load_ratio_late:.4f}")
-    
-    print(capacity)
+    UELB_kakai.objective = minimize(L_kakai)
 
-    print("フローの経路数合計")
-    print(total_path_count)
-    
+    start_kakai = time.time()
+    UELB_kakai.optimize()
+    elapsed_time_kakai = time.time() - start_kakai
 
+    if UELB_kakai.num_solutions > 0:
+        print("Objective :", UELB_kakai.objective_value)
+        print(All_commodity_list)
+        print("需要量：", demand_list)
+        print(capacity)
 
+        result_flow_var_kakai = []
+        for l in range(len(g.all_flows)):
+            result_x = []
+            for m in range(len(r_kakai)):
+                result_x.append(flow_var_kakai[l][m].x)
+            result_flow_var_kakai.append(result_x)
 
-plt.figure(figsize=(10, 6))
-plt.plot(iterations, max_load_ratios, marker='o', label='Max Load Ratio')
-plt.xlabel("Iteration",fontsize=18)
-plt.ylabel("Maximum Load Ratio",fontsize=18)
-plt.title("Maximum Load Ratio Over Iterations",fontsize=12)
-plt.legend()
-plt.grid(True)
-plt.show()
+        all_path = []
+        for l in range(len(g.all_flows)):
+            commodity_path = []
+            for m,(i,j) in r_kakai:
+                if result_flow_var_kakai[l][m] == 1:
+                    commodity_path.append((i,j))
+            all_path.append(commodity_path)
+
+        print(result_flow_var_kakai)
+        print(all_path)
+        print("time :", elapsed_time_kakai)
+        print("--------------------------------------------")
+
+        with open('mip.csv', 'a', newline='') as f:
+            out = csv.writer(f)
+            if a == 1:
+                out.writerow(['Objective','time','graph'])
+            out.writerow([UELB_kakai.objective_value, elapsed_time_kakai, graph_model])
+
+        nx.draw(g, with_labels=True)
+        plt.show()
+
+    else:
+        print("No solution found. Status:", UELB_kakai.status)
+
+    kurikaesi -= 1

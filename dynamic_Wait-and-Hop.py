@@ -36,14 +36,14 @@ def calculate_timer(current_max_load, next_max_load, total_path_count, tau, beta
 
 
 # グラフ生成パラメータ
-node = 10 # NSFNET使用中は14で固定
-seed_value = 40  # 任意のシード値を指定
+node = 14 # NSFNET使用中は14で固定
+seed_value = 41  # 任意のシード値を指定
 random.seed(seed_value)
-a = 20  # 品種数
+a = 15  # 品種数
 b = a
-beta = 160
+beta = 100
 tau = 2
-count = 20  # 経路変更の最大回数
+count = 200  # 経路変更の最大回数
 
 retu = 4
 graph_model = "random"
@@ -69,7 +69,6 @@ for _ in range(1):
         while True:
             s, t = random.sample(area_nodes_list, 2)  # s と t を異なるノードとして選択
             demand = random.randint(5, 15)
-            
             paths = find_all_paths(g, s, t)
             if not paths:
                 continue  # 経路がない場合は再選択
@@ -182,6 +181,8 @@ for _ in range(1):
 
     print("フローの経路数合計")
     print(total_path_count)
+    
+    print(All_commodity_list)
     
 
 

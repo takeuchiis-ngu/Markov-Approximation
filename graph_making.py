@@ -254,6 +254,32 @@ class Graphs(nx.DiGraph):
 
 		# self.arg = arg
 
+	def add_directed_edge(self, G, x, y):
+		cap = random.randrange(40, 60, 1)
+		G.add_edge(x, y,
+			capacity=int(cap),
+			update_capacity=int(cap),
+			length=float(self.delta),
+			flow_list=list(self.initimal_list),
+			flow_demand_init=dict(self.flow_initialValues),
+			flow_init=list(self.initimal_list),
+			flow_kakai=dict(self.flow_initialValues),
+			flow_kakai_donyoku=dict(self.flow_initialValues),
+			flow=dict(self.flow_initialValues),
+			flow_frac=dict(self.flow_initialValues),
+			flow_frac_donyoku=dict(self.flow_initialValues),
+			elb_flow=dict(self.elb_flow_initialValues),
+			candidate_flows=dict(),
+			load_factor=0,
+			load_factor_init=0,
+			load_factor_frac=0,
+			load_factor_frac_donyoku=0,
+			load_factor_kakai=0,
+			load_factor_kakai_donyoku=0,
+			load_factor_part=0,
+			x=dict(), x_kakai=dict(), x_donyoku_kakai=dict(), xf=dict(), xf_donyoku=dict(),
+			x_init=dict(), flag=False
+		)
 
 
 	#部分誘導グラフを出力する関数
