@@ -37,13 +37,13 @@ def calculate_timer(current_max_load, next_max_load, total_path_count, tau, beta
 
 # グラフ生成パラメータ
 node = 14 # NSFNET使用中は14で固定
-seed_value = 41  # 任意のシード値を指定
+seed_value = 42  # 任意のシード値を指定
 random.seed(seed_value)
 a = 15  # 品種数
 b = a
 beta = 100
 tau = 2
-count = 200  # 経路変更の最大回数
+count = 300  # 経路変更の最大回数
 
 retu = 4
 graph_model = "random"

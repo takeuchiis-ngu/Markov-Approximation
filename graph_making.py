@@ -104,8 +104,9 @@ class Graphs(nx.DiGraph):
 		self.number_of_areanodes = number_of_areanodes
 		self.area_height = area_height
 		height = int(area_height)
-		ty = 0	#ty=1だとnewman_watts_strogatz_graph。0だと自作のグラフ
-		if ty == 1:
+		all_nodes = list(G.nodes())
+		ty = 1	#ty=0だとnewman_watts_strogatz_graph。1だと自作のグラフ
+		if ty == 0:
 			NWS = nx.newman_watts_strogatz_graph(n, k, 0.5, seed=seed)
 			for a in range(number_of_area):
 				self.area_nodes_dict[a] = [] #リストの中のリスト生成？self.area_nodes_dict[[],[]]
@@ -153,15 +154,21 @@ class Graphs(nx.DiGraph):
 			G.add_bidirectionaledge(G, 11, 12)
 			G.add_bidirectionaledge(G, 12, 13)
 
-			#エリアごとにノードを分ける
-			for area in range(1,number_of_area+1):
-				if(area > 1):
-					for area_node in range(1,number_of_areanodes+1):
-						(self.area_nodes_dict[area-1]).append((number_of_areanodes*(area-1))-height*(area-1)+area_node) #列×ノード数を表していて、エリアの大きさを表している？エリア[0]は3×10=30が格納される
-				else:
-					for area_node in range(1,number_of_areanodes+1):
-						(self.area_nodes_dict[area-1]).append(area_node)
-				#何のためのelse？
+			all_nodes = list(G.nodes())
+
+			# --- 根本解決: 実際に G に存在するノード全体をエリアに登録 ---
+			#  (number_of_area == 1 のときは G.nodes() 丸ごと、
+			#   複数エリアの場合は分割ロジックを別途用意してください)
+			if number_of_area == 1:
+				self.area_nodes_dict[0] = all_nodes
+			else:
+				# 例: 均等に分割したいなら
+				chunk = len(all_nodes) // number_of_area
+				for a in range(number_of_area):
+					start = a * chunk
+					end = (a+1)*chunk if a < number_of_area-1 else len(all_nodes)
+					self.area_nodes_dict[a] = all_nodes[start:end]
+		
 
 		return G
 
