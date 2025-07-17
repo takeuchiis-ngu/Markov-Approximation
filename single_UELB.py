@@ -25,7 +25,7 @@ from operator import itemgetter, attrgetter
 # O(|Pl|^k)になるので，指数時間になる
 
 kurikaesi = 1
-a = 30
+a = 15
 b = a #int (input('area品種数>>'))
 c = 1 #int (input('エリア数>>'))
 #d = 16 #int (input('エリアのノード数>>'))
@@ -129,6 +129,7 @@ while(kurikaesi > 0):
                     #     s = 3
                     #     t = 2
                     demand  = random.randrange(5, 15)
+                    # demand  = random.randrange(10, 20)
                     # demand = 10
 
                 if(s!=t and ((s,t) not in All_commodity_list)): #流し始めのノードからそのノードに戻ってくる組み合わせは考えていない 

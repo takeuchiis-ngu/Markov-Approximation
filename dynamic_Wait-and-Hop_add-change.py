@@ -56,11 +56,11 @@ demand_change_schedule = {
 node = 14
 seed_value = 42
 random.seed(seed_value)
-a = 30
+a = 15
 b = a
 beta = 100
 tau = 2
-count = 100
+count = 300
 retu = 4
 graph_model = "random"
 k_paths = 20 # 1フローあたりの最大経路数
@@ -83,6 +83,7 @@ for _ in range(1):
         while True:
             s, t = random.sample(area_nodes_list, 2)
             demand = random.randint(5, 15)
+            demand = random.randint(10, 20)
             paths = find_k_shortest_paths(g, s, t, k=k_paths, epsilon=epsilon, over_factor=5)
             if not paths:
                 continue
