@@ -98,14 +98,14 @@ class Graphs(nx.DiGraph):
 			(self.area_nodes_dict[area-1]).append(area_node)
 	
 
-	def randomGraph(self, G, n, k, seed, number_of_area, number_of_areanodes, area_height):
+	def randomGraph(self, G, n, k, seed, number_of_area, number_of_areanodes, area_height, ty = 2):
 		self.G = G
 		self.number_of_area = number_of_area
 		self.number_of_areanodes = number_of_areanodes
 		self.area_height = area_height
 		height = int(area_height)
 		all_nodes = list(G.nodes())
-		ty = 1	#ty=0だとnewman_watts_strogatz_graph。1だと自作のグラフ
+		#ty=0だとnewman_watts_strogatz_graph。1だとNSFNETのグラフ。2だとGEANT2のグラフ
 		if ty == 0:
 			NWS = nx.newman_watts_strogatz_graph(n, k, 0.5, seed=seed)
 			for a in range(number_of_area):
@@ -126,7 +126,7 @@ class Graphs(nx.DiGraph):
 					for area_node in range(1,number_of_areanodes+1):
 						(self.area_nodes_dict[area-1]).append(area_node)
 				#何のためのelse？
-		else:
+		elif ty == 1:
 			for a in range(number_of_area):
 				self.area_nodes_dict[a] = [] #リストの中のリスト生成？self.area_nodes_dict[[],[]]
 			for a in range(14):
@@ -169,6 +169,61 @@ class Graphs(nx.DiGraph):
 					end = (a+1)*chunk if a < number_of_area-1 else len(all_nodes)
 					self.area_nodes_dict[a] = all_nodes[start:end]
 		
+		else:
+
+			G.add_bidirectionaledge(G, 0, 1)
+			G.add_bidirectionaledge(G, 0, 2)
+			G.add_bidirectionaledge(G, 0, 5)
+			G.add_bidirectionaledge(G, 1, 3)
+			G.add_bidirectionaledge(G, 1, 4)
+			G.add_bidirectionaledge(G, 2, 3)
+			G.add_bidirectionaledge(G, 2, 6)
+			G.add_bidirectionaledge(G, 3, 9)
+			G.add_bidirectionaledge(G, 4, 7)
+			G.add_bidirectionaledge(G, 4, 10)
+			G.add_bidirectionaledge(G, 5, 6)
+			G.add_bidirectionaledge(G, 5, 8)
+			G.add_bidirectionaledge(G, 6, 11)
+			G.add_bidirectionaledge(G, 7, 8)
+			G.add_bidirectionaledge(G, 7, 13)
+			G.add_bidirectionaledge(G, 8, 9)
+			G.add_bidirectionaledge(G, 8, 12)
+			G.add_bidirectionaledge(G, 9, 10)
+			G.add_bidirectionaledge(G, 9, 18)
+			G.add_bidirectionaledge(G, 10, 11)
+			G.add_bidirectionaledge(G, 10, 13)
+			G.add_bidirectionaledge(G, 11, 12)
+			G.add_bidirectionaledge(G, 12, 14)
+			G.add_bidirectionaledge(G, 12, 15)
+			G.add_bidirectionaledge(G, 13, 14)
+			G.add_bidirectionaledge(G, 14, 16)
+			G.add_bidirectionaledge(G, 15, 17)
+			G.add_bidirectionaledge(G, 15, 20)
+			G.add_bidirectionaledge(G, 16, 17)
+			G.add_bidirectionaledge(G, 16, 19)
+			G.add_bidirectionaledge(G, 17, 18)
+			G.add_bidirectionaledge(G, 18, 21)
+			G.add_bidirectionaledge(G, 18, 22)
+			G.add_bidirectionaledge(G, 19, 20)
+			G.add_bidirectionaledge(G, 20, 23)
+			G.add_bidirectionaledge(G, 21, 22)
+			G.add_bidirectionaledge(G, 22, 23)
+
+			all_nodes = list(G.nodes())
+
+			# --- 根本解決: 実際に G に存在するノード全体をエリアに登録 ---
+			#  (number_of_area == 1 のときは G.nodes() 丸ごと、
+			#   複数エリアの場合は分割ロジックを別途用意してください)
+			if number_of_area == 1:
+				self.area_nodes_dict[0] = all_nodes
+			else:
+				# 例: 均等に分割したいなら
+				chunk = len(all_nodes) // number_of_area
+				for a in range(number_of_area):
+					start = a * chunk
+					end = (a+1)*chunk if a < number_of_area-1 else len(all_nodes)
+					self.area_nodes_dict[a] = all_nodes[start:end]
+
 
 		return G
 

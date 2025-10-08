@@ -56,11 +56,11 @@ demand_change_schedule = {
 node = 14
 seed_value = 42
 random.seed(seed_value)
-a = 15
+a = 30
 b = a
 beta = 100
 tau = 2
-count = 50
+count = 200
 retu = 4
 graph_model = "random"
 k_paths = 20 # 1フローあたりの最大経路数
